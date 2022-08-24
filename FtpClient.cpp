@@ -68,7 +68,6 @@ void FtpClient::run()
     while (cin >> cmd)
     {
         vCmd = split(cmd, " ");
-        cout<<vCmd.size()<<endl;
         string realCmd = vCmd.front();        switch (hash_(realCmd.c_str()))
         {
         case "ls"_hash:
