@@ -23,9 +23,6 @@
 
 #define MAX_BUFSIZE 1024
 
-/************************************************************************/
-/* ACE库实现FTP功能，支持发送和接受文件                                 */
-/************************************************************************/
 class FTPClient{
 public:
 	FTPClient();
@@ -40,7 +37,7 @@ public:
 
 	void setAddr(string ip,int port);
 	bool ChangeLocalDir(const std::string &dirname);
-	bool ChangeRemoteDir(const std::string &dirname);
+	bool ChangeRemoteDir(const std::string dirname);
 
 	bool PutFile(const std::string &filename);
 	bool GetFile(const std::string &filename);

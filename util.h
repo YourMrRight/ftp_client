@@ -51,19 +51,27 @@ constexpr unsigned long long operator"" _hash(char const *p, size_t)
     return hash_compile_time(p);
 }
 
-void Stringsplit(string str, const char split, vector<string> &res)
+void Stringsplit(string str, string split, vector<string> &res)
 {
-    istringstream iss(str);            // 输入流
-    string token;                      // 接收缓冲区
-    while (getline(iss, token, split)) // 以split为分隔符
+    while (str.size()>0)
     {
-        res.push_back(token);
+        res.push_back(str.substr(0,str.find_first_of(split)));
+        str.erase(0, str.find_first_of(split));
+        str.erase(0, str.find_first_not_of(split));
     }
 }
 void trim(string &s){
-    if (!s.empty()){
+    if (!s.empty()) {
         s.erase(0, s.find_first_not_of(" "));
-        s.erase(s.find_first_of("\r"), s.size());
+        if (string::npos != s.find_first_of("\n")) {
+            s.erase(s.find_first_of("\n"), s.size());
+        }
+        if(string::npos != s.find_first_of("\r")){
+            s.erase(s.find_first_of("\r"), s.size());
+        }
+        if (string::npos != s.find_first_of("/n")) {
+            s.erase(s.find_first_of("/n"), s.size());
+        }
     }
 }
 void trimToParentDir(string &s){
@@ -106,4 +114,7 @@ int mk_dir(const char *dir)
 
 	return 0;
 }
+
+
+
 #endif

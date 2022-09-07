@@ -217,7 +217,7 @@ bool FTPClient::ChangeLocalDir(const std::string &dirname)
 }
 
 /*修改远程路径，影响下载的远程文件所在路径 或者 上传的文件所保存的路径*/
-bool FTPClient::ChangeRemoteDir(const std::string &dirname)
+bool FTPClient::ChangeRemoteDir(const std::string dirname)
 {
 	std::stringstream CWD, PWD;
 	std::string ftp_resp;
@@ -520,22 +520,24 @@ bool FTPClient::List(std::string &pathlist, const std::string &pathname)
 	int file_size;
 
 	PASV << "PASV"
-		 << "/r/n";
+		 << "/n";
 	if (this->Send(PASV.str()))
 	{
 		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "227")
 		{
+			cout<<ftp_resp<<endl;
 			return false;
 		}
 	}
-
+	cout<<ftp_resp<<endl;
 	ftp_resp = ftp_resp.substr(ftp_resp.find_last_of('(') + 1, (ftp_resp.find_last_of(')') - ftp_resp.find_last_of('(') - 1));
 
 	if (sscanf(ftp_resp.c_str(), "%d,%d,%d,%d,%d,%d", &d0, &d1, &d2, &d3, &p0, &p1) == -1)
 		return false;
 	ip << d0 << "." << d1 << "." << d2 << "." << d3;
 	ftp_data_addr.set((p0 << 8) + p1, ip.str().c_str());
-
+	cout<<(p0 << 8) + p1<<endl;
+	cout<<ip.str().c_str()<<endl;
 	if (connector.connect(stream, ftp_data_addr, &tv) == -1)
 	{
 		ACE_ERROR_RETURN((LM_ERROR, ACE_TEXT("(%P|%t) %p/n"), ACE_TEXT("connection failed")), false);
@@ -548,6 +550,7 @@ bool FTPClient::List(std::string &pathlist, const std::string &pathname)
 	{
 		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "150")
 		{
+			cout<<ftp_resp<<endl;
 			return false;
 		}
 	}
@@ -556,7 +559,7 @@ bool FTPClient::List(std::string &pathlist, const std::string &pathname)
 	while ((file_size = stream.recv(file_cache, sizeof(file_cache))) > 0)
 	{
 		pathlist.append(file_cache);
-
+		cout<<pathlist<<endl;
 		ACE_OS::memset(file_cache, 0x00, sizeof(file_cache));
 	}
 

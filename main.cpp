@@ -20,17 +20,17 @@ int ACE_TMAIN(int argc, ACE_TCHAR* argv[])
 	std::string ftp_local_file = "TaskThread.cpp";
 	FTPClient ftp_client;
 	do{
-		cout<<"ftp>input ip:"<<endl;
-		string ip;
-		cin>>ip;
-		cout<<"ftp>input server port:"<<endl;
-		int port;
-		cin>>port;
+		// cout<<"ftp>input ip:"<<endl;
+		// string ip;
+		// cin>>ip;
+		// cout<<"ftp>input server port:"<<endl;
+		// int port;
+		// cin>>port;
 
-		ftp_client.setAddr(ip, port);
+		ftp_client.setAddr(ftp_host, ftp_port);
 		if(!ftp_client.connect()){
 			return 0;
-		}
+		}	
 		std::string ftp_user;
 		std::string ftp_pwd;
 		cout<<"ftp>input your user name:"<<endl;
@@ -42,14 +42,18 @@ int ACE_TMAIN(int argc, ACE_TCHAR* argv[])
 	
 
 	do{
+		getchar();
 		cout<<"ftp>";
 		string parameter;
-		cin>>parameter;
+
+		getline(cin,parameter);
 		vector<string>cmd;
-		Stringsplit(parameter, ' ', cmd);
-		if(cmd[0] == "cd"){
-			ftp_client.ChangeLocalDir(cmd[1]);
-		}else if(cmd[0] == "quit"){
+		Stringsplit(parameter, " ", cmd);
+		if (cmd[0] == "chld" && cmd.size()>1) {
+			 ftp_client.ChangeLocalDir(cmd[1]);
+		} else if (cmd[0] == "cd" && cmd.size()>1) {
+			ftp_client.ChangeRemoteDir(cmd[1]);
+		} else if(cmd[0] == "quit"){
 			ftp_client.LogoOut();
 		}else if(cmd[0] == "put"){
 			ftp_client.PutFile(cmd[1]);
@@ -61,8 +65,8 @@ int ACE_TMAIN(int argc, ACE_TCHAR* argv[])
 			ftp_client.GetSysInfo();
 		}else if(cmd[0] == "ls"){
 			string path = cmd.size()>1?cmd[1]:"";
-			string pathlist;
-			ftp_client.List(pathlist, cmd[1]);
+			string pathlist;	
+			ftp_client.List(pathlist, path);
 		}
 
 

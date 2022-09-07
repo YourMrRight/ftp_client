@@ -1,0 +1,2 @@
+/home/scutech/client/build/CMakeFiles/rebuild_cache.dir
+/home/scutech/client/build/CMakeFiles/edit_cache.dir
