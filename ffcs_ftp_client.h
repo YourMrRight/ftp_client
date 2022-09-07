@@ -62,8 +62,7 @@ private:
 	int os_type_;
 
 public:
-	enum
-	{
+	enum{
 		OS_DEFAULT = 0,
 		OS_LINUX   = 1,
 		OS_WIN32   = 2,
