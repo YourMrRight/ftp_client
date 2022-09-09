@@ -47,6 +47,17 @@ public:
 
 	bool ReName(const std::string &srcname, const std::string &dstname);
 
+	bool pwd_cmd();
+	bool port_cmd();
+	bool pasv_cmd();
+	bool type_cmd();
+	bool dele_cmd(const std::string &filename);
+	bool mkd_cmd(const std::string &filename);
+	bool rmd_cmd(const std::string &dir);
+	bool size_cmd(const std::string &filename);
+	bool auth_cmd();
+	bool xpwd_cmd();
+
 private:
 	bool Recv(std::string &response);
 	bool Send(const std::string &command);

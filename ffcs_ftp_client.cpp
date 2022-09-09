@@ -1,12 +1,3 @@
-/*==================================================================================================
- * 项目名称: FTP操作库
- *     功能: 提供类和方法,实现FTP基本功能
- *     作者: huangjf
- *     联系: huangjf@ffcs.cn
- * 最近修改: 2010-9-1
- *     版本: v1.0.2
-  ==================================================================================================*/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <ace/OS.h>
@@ -17,6 +8,19 @@
 #include <ace/OS_NS_stdio.h>
 
 #include "ffcs_ftp_client.h"
+
+#define BEGINPORT 10000
+#define ENDPORT 15000
+#define LOCAL_IP "127.0.0.1"
+
+
+ACE_INET_Addr ftp_data_addr;
+
+ACE_SOCK_Stream stream;
+ACE_SOCK_Connector connector;
+ACE_SOCK_Acceptor acceptor;
+
+
 FTPClient::FTPClient()
 {
 	this->os_type_ = OS_DEFAULT;
@@ -39,7 +43,7 @@ bool FTPClient::connect()
 	ACE_Time_Value tv(MAX_CONN_TIMEOUT_SECOND, MAX_CONN_TIMEOUT_MILLISECOND);
 	if (this->connector_.connect(this->peer_, this->remote_addr_, &tv) == -1)
 	{
-		ACE_ERROR_RETURN((LM_ERROR, ACE_TEXT("(%P|%t) %p/n"), ACE_TEXT("connection failed")), false);
+		ACE_ERROR_RETURN((LM_ERROR, ACE_TEXT("(%P|%t) %p\n"), ACE_TEXT("connection failed")), false);
 		return false;
 	}
 	std::string ftp_resp;
@@ -53,7 +57,7 @@ bool FTPClient::connect()
 	{
 		return false;
 	}
-	ACE_DEBUG((LM_DEBUG, ACE_TEXT("(%P|%t) connected to (%s:%d)/n/n"), this->remote_addr_.get_host_addr(), this->remote_addr_.get_port_number()));
+	ACE_DEBUG((LM_DEBUG, ACE_TEXT("(%P|%t) connected to (%s:%d)\n\n"), this->remote_addr_.get_host_addr(), this->remote_addr_.get_port_number()));
 	return true;
 }
 
@@ -149,7 +153,7 @@ bool FTPClient::LogoOut()
 	std::string ftp_resp;
 
 	QUIT << "QUIT"
-		 << "/r/n";
+		 << "\n";
 	if (this->Send(QUIT.str()))
 	{
 		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "221")
@@ -157,7 +161,6 @@ bool FTPClient::LogoOut()
 			return false;
 		}
 	}
-
 	return true;
 }
 
@@ -173,8 +176,7 @@ bool FTPClient::GetSysInfo()
 	std::stringstream SYST;
 	std::string ftp_resp;
 
-	SYST << "SYST"
-		 << "/r/n";
+	SYST << "SYST"<< "\n";
 	if (this->Send(SYST.str()))
 	{
 		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "215")
@@ -193,7 +195,7 @@ bool FTPClient::Noop()
 	std::string ftp_resp;
 
 	NOOP << "NOOP"
-		 << "/r/n";
+		 << "\n";
 	if (this->Send(NOOP.str()))
 	{
 		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "200")
@@ -219,10 +221,10 @@ bool FTPClient::ChangeLocalDir(const std::string &dirname)
 /*修改远程路径，影响下载的远程文件所在路径 或者 上传的文件所保存的路径*/
 bool FTPClient::ChangeRemoteDir(const std::string dirname)
 {
-	std::stringstream CWD, PWD;
+	std::stringstream CWD;
 	std::string ftp_resp;
 
-	CWD << "CWD " << dirname << "/r/n";
+	CWD << "CWD " << dirname << "\n";
 	if (this->Send(CWD.str()))
 	{
 		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "250")
@@ -230,34 +232,20 @@ bool FTPClient::ChangeRemoteDir(const std::string dirname)
 			return false;
 		}
 	}
-
-	PWD << "PWD"
-		<< "/r/n";
-	if (this->Send(PWD.str()))
-	{
-		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "257")
-		{
-			return false;
-		}
-	}
-
+	this->pwd_cmd();
 	return true;
 }
 
 /*上传文件*/
 bool FTPClient::PutFile(const std::string &filename)
 {
-	std::stringstream TYPE, PASV, STOR;
+	std::stringstream STOR;
 	std::string ftp_resp;
 
 	ACE_Time_Value tv(MAX_CONN_TIMEOUT_SECOND, MAX_CONN_TIMEOUT_MILLISECOND);
 
 	int d0, d1, d2, d3, p0, p1;
 	std::stringstream ip;
-	ACE_INET_Addr ftp_data_addr;
-
-	ACE_SOCK_Stream stream;
-	ACE_SOCK_Connector connector;
 
 	ACE_FILE_Info file_info;
 	ACE_FILE_IO file_put;
@@ -268,42 +256,11 @@ bool FTPClient::PutFile(const std::string &filename)
 	if (ACE_OS::access(filename.c_str(), F_OK) < 0)
 		return false; /*文件不存在*/
 
-	/*修改类型*/
-	TYPE << "TYPE I"
-		 << "/r/n";
-	if (this->Send(TYPE.str()))
-	{
-		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "200")
-		{
-			return false;
-		}
-	}
-
-	PASV << "PASV"
-		 << "/r/n";
-	if (this->Send(PASV.str()))
-	{
-		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "227")
-		{
-			return false;
-		}
-	}
-
-	ftp_resp = ftp_resp.substr(ftp_resp.find_last_of('(') + 1, (ftp_resp.find_last_of(')') - ftp_resp.find_last_of('(') - 1));
-
-	if (sscanf(ftp_resp.c_str(), "%d,%d,%d,%d,%d,%d", &d0, &d1, &d2, &d3, &p0, &p1) == -1)
+	if(!this->pasv_cmd()){
 		return false;
-	ip << d0 << "." << d1 << "." << d2 << "." << d3;
-	ftp_data_addr.set((p0 << 8) + p1, ip.str().c_str());
-
-	if (connector.connect(stream, ftp_data_addr, &tv) == -1)
-	{
-		ACE_ERROR_RETURN((LM_ERROR, ACE_TEXT("(%P|%t) %p/n"), ACE_TEXT("connection failed")), false);
 	}
 
-	ACE_DEBUG((LM_DEBUG, ACE_TEXT("(%P|%t) connected to (%s:%d)/n/n"), this->remote_addr_.get_host_addr(), this->remote_addr_.get_port_number()));
-
-	STOR << "STOR " << filename << "/r/n";
+	STOR << "STOR " << filename << "\n";
 	if (this->Send(STOR.str()))
 	{
 		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "150")
@@ -313,10 +270,10 @@ bool FTPClient::PutFile(const std::string &filename)
 	}
 
 	if (file_con.connect(file_put, ACE_FILE_Addr(filename.c_str()), &tv, ACE_Addr::sap_any, 0, O_RDONLY, ACE_DEFAULT_FILE_PERMS) == -1)
-		ACE_ERROR_RETURN((LM_ERROR, ACE_TEXT("%p/n to %s"), ACE_TEXT("open"), filename), false);
+		ACE_ERROR_RETURN((LM_ERROR, ACE_TEXT("%p\n to %s"), ACE_TEXT("open"), filename), false);
 
 	if (file_put.get_info(&file_info) == -1)
-		ACE_ERROR_RETURN((LM_ERROR, ACE_TEXT("%p/n"), ACE_TEXT("get_info")), false);
+		ACE_ERROR_RETURN((LM_ERROR, ACE_TEXT("%p\n"), ACE_TEXT("get_info")), false);
 
 	all_size = 0;
 	while ((all_size < file_info.size_) && ((file_size = file_put.recv(file_cache, sizeof(file_cache))) > 0))
@@ -348,48 +305,20 @@ bool FTPClient::PutFile(const std::string &filename)
 /*下载文件*/
 bool FTPClient::GetFile(const std::string &filename)
 {
-	std::stringstream PASV, RETR;
+	std::stringstream RETR;
 	std::string ftp_resp;
-
 	ACE_Time_Value tv(MAX_CONN_TIMEOUT_SECOND, MAX_CONN_TIMEOUT_MILLISECOND);
-
-	int d0, d1, d2, d3, p0, p1;
-	std::stringstream ip;
-	ACE_INET_Addr ftp_data_addr;
-
-	ACE_SOCK_Stream stream;
-	ACE_SOCK_Connector connector;
 
 	ACE_FILE_IO file_put;
 	ACE_FILE_Connector file_con;
 	char file_cache[MAX_BUFSIZE];
 	int file_size, all_size;
-
-	PASV << "PASV"
-		 << "/r/n";
-	if (this->Send(PASV.str()))
-	{
-		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "227")
-		{
-			return false;
-		}
-	}
-
-	ftp_resp = ftp_resp.substr(ftp_resp.find_last_of('(') + 1, (ftp_resp.find_last_of(')') - ftp_resp.find_last_of('(') - 1));
-
-	if (sscanf(ftp_resp.c_str(), "%d,%d,%d,%d,%d,%d", &d0, &d1, &d2, &d3, &p0, &p1) == -1)
+	
+	if(!this->pasv_cmd()){
 		return false;
-	ip << d0 << "." << d1 << "." << d2 << "." << d3;
-	ftp_data_addr.set((p0 << 8) + p1, ip.str().c_str());
-
-	if (connector.connect(stream, ftp_data_addr, &tv) == -1)
-	{
-		ACE_ERROR_RETURN((LM_ERROR, ACE_TEXT("(%P|%t) %p/n"), ACE_TEXT("connection failed")), false);
 	}
-
-	ACE_DEBUG((LM_DEBUG, ACE_TEXT("(%P|%t) connected to (%s:%d)/n/n"), this->remote_addr_.get_host_addr(), this->remote_addr_.get_port_number()));
-
-	RETR << "RETR " << filename << "/r/n";
+	
+	RETR << "RETR " << filename << "\n";
 	if (this->Send(RETR.str()))
 	{
 		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "150")
@@ -399,7 +328,7 @@ bool FTPClient::GetFile(const std::string &filename)
 	}
 
 	if (file_con.connect(file_put, ACE_FILE_Addr(filename.c_str()), &tv, ACE_Addr::sap_any, 0, O_RDWR | O_CREAT, ACE_DEFAULT_FILE_PERMS) == -1)
-		ACE_ERROR_RETURN((LM_ERROR, ACE_TEXT("%p/n to %s"), ACE_TEXT("open"), filename), false);
+		ACE_ERROR_RETURN((LM_ERROR, ACE_TEXT("%p\n to %s"), ACE_TEXT("open"), filename), false);
 
 	all_size = 0;
 	while ((file_size = stream.recv(file_cache, sizeof(file_cache))) > 0)
@@ -441,7 +370,7 @@ bool FTPClient::NList(std::string &pathlist, const std::string &pathname)
 	int file_size;
 
 	PASV << "PASV"
-		 << "/r/n";
+		 << "\n";
 	if (this->Send(PASV.str()))
 	{
 		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "227")
@@ -459,19 +388,19 @@ bool FTPClient::NList(std::string &pathlist, const std::string &pathname)
 
 	if (connector.connect(stream, ftp_data_addr, &tv) == -1)
 	{
-		ACE_ERROR_RETURN((LM_ERROR, ACE_TEXT("(%P|%t) %p/n"), ACE_TEXT("connection failed")), false);
+		ACE_ERROR_RETURN((LM_ERROR, ACE_TEXT("(%P|%t) %p\n"), ACE_TEXT("connection failed")), false);
 	}
 
-	ACE_DEBUG((LM_DEBUG, ACE_TEXT("(%P|%t) connected to (%s:%d)/n/n"), this->remote_addr_.get_host_addr(), this->remote_addr_.get_port_number()));
+	ACE_DEBUG((LM_DEBUG, ACE_TEXT("(%P|%t) connected to (%s:%d)\n\n"), this->remote_addr_.get_host_addr(), this->remote_addr_.get_port_number()));
 
 	if (pathname.empty())
 	{
 		NLST << "NLST"
-			 << "/r/n";
+			 << "\n";
 	}
 	else
 	{
-		NLST << "NLST " << pathname << "/r/n";
+		NLST << "NLST " << pathname << "\n";
 	}
 	if (this->Send(NLST.str()))
 	{
@@ -504,62 +433,30 @@ bool FTPClient::NList(std::string &pathlist, const std::string &pathname)
 /*列表*/
 bool FTPClient::List(std::string &pathlist, const std::string &pathname)
 {
-	std::stringstream PASV, LIST;
+	std::stringstream  LIST;
 	std::string ftp_resp;
 
-	ACE_Time_Value tv(MAX_CONN_TIMEOUT_SECOND, MAX_CONN_TIMEOUT_MILLISECOND);
-
-	int d0, d1, d2, d3, p0, p1;
-	std::stringstream ip;
-	ACE_INET_Addr ftp_data_addr;
-
-	ACE_SOCK_Stream stream;
-	ACE_SOCK_Connector connector;
 
 	char file_cache[MAX_BUFSIZE] = {0};
 	int file_size;
 
-	PASV << "PASV"
-		 << "/n";
-	if (this->Send(PASV.str()))
-	{
-		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "227")
-		{
-			cout<<ftp_resp<<endl;
-			return false;
-		}
-	}
-	cout<<ftp_resp<<endl;
-	ftp_resp = ftp_resp.substr(ftp_resp.find_last_of('(') + 1, (ftp_resp.find_last_of(')') - ftp_resp.find_last_of('(') - 1));
+	this->pasv_cmd();
 
-	if (sscanf(ftp_resp.c_str(), "%d,%d,%d,%d,%d,%d", &d0, &d1, &d2, &d3, &p0, &p1) == -1)
-		return false;
-	ip << d0 << "." << d1 << "." << d2 << "." << d3;
-	ftp_data_addr.set((p0 << 8) + p1, ip.str().c_str());
-	cout<<(p0 << 8) + p1<<endl;
-	cout<<ip.str().c_str()<<endl;
-	if (connector.connect(stream, ftp_data_addr, &tv) == -1)
-	{
-		ACE_ERROR_RETURN((LM_ERROR, ACE_TEXT("(%P|%t) %p/n"), ACE_TEXT("connection failed")), false);
-	}
-
-	ACE_DEBUG((LM_DEBUG, ACE_TEXT("(%P|%t) connected to (%s:%d)/n/n"), this->remote_addr_.get_host_addr(), this->remote_addr_.get_port_number()));
-
-	LIST << "LIST " << pathname << "/r/n";
+	LIST << "LIST " << pathname << "\n";
 	if (this->Send(LIST.str()))
 	{
 		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "150")
 		{
-			cout<<ftp_resp<<endl;
 			return false;
 		}
 	}
 
 	pathlist.clear();
-	while ((file_size = stream.recv(file_cache, sizeof(file_cache))) > 0)
+	while ((file_size = stream.recv(file_cache, MAX_BUFSIZE)) > 0)
 	{
 		pathlist.append(file_cache);
 		cout<<pathlist<<endl;
+		pathlist.clear();
 		ACE_OS::memset(file_cache, 0x00, sizeof(file_cache));
 	}
 
@@ -581,7 +478,7 @@ bool FTPClient::ReName(const std::string &srcname, const std::string &dstname)
 	std::stringstream RNFR, RNTO;
 	std::string ftp_resp;
 
-	RNFR << "RNFR " << srcname << "/r/n";
+	RNFR << "RNFR " << srcname << "\n";
 	if (this->Send(RNFR.str()))
 	{
 		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "350")
@@ -590,7 +487,7 @@ bool FTPClient::ReName(const std::string &srcname, const std::string &dstname)
 		}
 	}
 
-	RNTO << "RNTO " << dstname << "/r/n";
+	RNTO << "RNTO " << dstname << "\n";
 	if (this->Send(RNTO.str()))
 	{
 		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "250")
@@ -601,5 +498,184 @@ bool FTPClient::ReName(const std::string &srcname, const std::string &dstname)
 
 	return true;
 }
+
+bool FTPClient::pwd_cmd()
+{
+	std::stringstream PWD;
+	std::string ftp_resp;
+
+	PWD << "PWD" << "\n";
+	if (this->Send(PWD.str()))
+	{
+		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "257")
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+bool FTPClient::port_cmd()
+{
+	std::stringstream PORT;
+	string ftp_resp;
+	PORT << "PORT ";
+	ACE_Time_Value tv(MAX_CONN_TIMEOUT_SECOND, MAX_CONN_TIMEOUT_MILLISECOND);
+	int pPort;
+    for(pPort = BEGINPORT; pPort < ENDPORT; pPort++) {
+        if(ftp_data_addr.set(pPort) == -1) {
+            continue;
+        }
+        if(acceptor.open(ftp_data_addr)==-1) {
+            continue;
+        }
+        break;
+    }
+    if (pPort >= ENDPORT) {
+        return false;
+    }
+    PORT<<"("<<LOCAL_IP<<","<<(pPort>>8)<<","<<(pPort & 0xFF)<<").\n";
+    this->peer_.send(PORT.str().c_str(), ACE_OS::strlen(PORT.str().c_str()),0);
+    if (acceptor.accept(stream) == -1) {
+        ACE_DEBUG((LM_DEBUG, "监听失败！\n"));
+		return false;
+    }
+	acceptor.close();
+	return true;
+}
+
+bool FTPClient::pasv_cmd()
+{
+	std::stringstream PASV;
+	string ftp_resp;
+	PASV << "PASV"<< "\n";
+
+	ACE_Time_Value tv(MAX_CONN_TIMEOUT_SECOND, MAX_CONN_TIMEOUT_MILLISECOND);
+
+	int d0, d1, d2, d3, p0, p1;
+	std::stringstream ip;
+
+	char file_cache[MAX_BUFSIZE] = {0};
+	int file_size;
+	if (this->Send(PASV.str()))
+	{
+		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "227")
+		{
+			return false;
+		}
+	}
+	ftp_resp = ftp_resp.substr(ftp_resp.find_last_of('(') + 1, (ftp_resp.find_last_of(')') - ftp_resp.find_last_of('(') - 1));
+
+	if (sscanf(ftp_resp.c_str(), "%d,%d,%d,%d,%d,%d", &d0, &d1, &d2, &d3, &p0, &p1) == -1)
+		return false;
+	ip << d0 << "." << d1 << "." << d2 << "." << d3;
+	ftp_data_addr.set((p0 << 8) + p1, ip.str().c_str());
+	if (connector.connect(stream, ftp_data_addr, &tv) == -1)
+	{
+		ACE_ERROR_RETURN((LM_ERROR, ACE_TEXT("(%P|%t) %p\n"), ACE_TEXT("connection failed")), false);
+	}
+
+	ACE_DEBUG((LM_DEBUG, ACE_TEXT("(%P|%t) connected to (%s:%d)\n\n"), this->remote_addr_.get_host_addr(), this->remote_addr_.get_port_number()));
+	return true;
+}
+
+bool FTPClient::type_cmd()
+{
+	std::stringstream TYPE;
+	string ftp_resp;
+	TYPE << "TYPE I"<< "\n";
+	if (this->Send(TYPE.str()))
+	{
+		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "200")
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+bool FTPClient::dele_cmd(const std::string &filename)
+{
+	std::stringstream DELE;
+	string ftp_resp;
+	DELE<< "DELE "<<filename<<"\n";
+	if (this->Send(DELE.str())) {
+		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "250") {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool FTPClient::mkd_cmd(const std::string &filename)
+{
+	std::stringstream MDK;
+	string ftp_resp;
+	MDK<< "MKD "<<filename<<"\n";
+	if (this->Send(MDK.str())) {
+		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "275") {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool FTPClient::rmd_cmd(const std::string &dir)
+{
+	std::stringstream RMD;
+	string ftp_resp;
+	RMD<< "RMD "<<dir<<"\n";
+	if (this->Send(RMD.str())) {
+		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "250") {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool FTPClient::size_cmd(const std::string &filename)
+{
+	std::stringstream SIZE;
+	string ftp_resp;
+	SIZE<< "SIZE "<<filename<<"\n";
+	if (this->Send(SIZE.str())) {
+		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "213") {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool FTPClient::auth_cmd()
+{
+	std::stringstream AUTH;
+	string ftp_resp;
+	AUTH << "AUTH "<< "\n";
+	if (this->Send(AUTH.str()))
+	{
+		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "502")
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+bool FTPClient::xpwd_cmd()
+{
+	std::stringstream XPWD;
+	string ftp_resp;
+	XPWD << "XPWD "<< "\n";
+	if (this->Send(XPWD.str()))
+	{
+		if (!this->Recv(ftp_resp) || ftp_resp.substr(0, 3) != "257")
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+
 
 
